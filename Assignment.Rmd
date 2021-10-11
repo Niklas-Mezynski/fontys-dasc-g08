@@ -1,0 +1,60 @@
+---
+title: "Assignment"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## R Markdown
+
+This is an R Markdown document. 
+
+```{r, echo = FALSE}
+library(ggplot2)
+library(dplyr)
+library(forcats)
+```
+
+```{r}
+customers <- read.csv("C:\\Users\\nikla\\Documents\\Uni\\Semester_3\\DASC\\Datasets\\BrazilianEcommerce\\olist_customers_dataset.csv")
+orders <- read.csv("C:\\Users\\nikla\\Documents\\Uni\\Semester_3\\DASC\\Datasets\\BrazilianEcommerce\\olist_orders_dataset.csv")
+order_items <- read.csv("C:\\Users\\nikla\\Documents\\Uni\\Semester_3\\DASC\\Datasets\\BrazilianEcommerce\\olist_order_items_dataset.csv")
+```
+
+
+```{r}
+orders_customer_items <- orders %>%
+  left_join(customers, "customer_id") %>%
+  left_join(order_items, "order_id")
+```
+
+In this code chunk, we create a new table which contains the average price per order for each state.
+Therefore we have to calculate the total order price first and after that we can group by the customer state and calculate the average.
+```{r}
+avg_order_item_price_by_state <- orders_customer_items %>%
+  group_by(order_id) %>%
+  summarise(
+    order_price = sum(price),
+    customer_state = customer_state
+  ) %>%
+  group_by(customer_state) %>%
+  summarise(
+    avg_price = round(mean(order_price, na.rm = TRUE), digits = 2)
+  )
+avg_order_item_price_by_state
+```
+
+```{r}
+ggplot(data = avg_order_item_price_by_state, aes(fct_reorder(customer_state, avg_price), avg_price)) +
+  geom_col(fill = "#FF6666") +
+  ggtitle("Plot of the average price of one order per state") +
+  xlab("State") + ylab("Average price per order") +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+)
+```
+
+
+
