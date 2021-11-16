@@ -56,5 +56,9 @@ ggplot(data = avg_order_item_price_by_state, aes(fct_reorder(customer_state, avg
 )
 ```
 
+# Notes
+- Sales per state
+- Monthly sales/revenue
+- Maybe search a data set which gives info about the economic performance of each state
 
 
