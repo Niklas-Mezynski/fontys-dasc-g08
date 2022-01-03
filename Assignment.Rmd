@@ -7,27 +7,34 @@ output: html_document
 knitr::opts_chunk$set(echo = FALSE)
 ```
 
-## R Markdown
+## Introduction
+This dataset gives information about the largest online store in Brazil - 'Olist'. Small businesses can use the platform to sell their products on the side and ship them by using the Olist logistic partners.\
+The dataset contains (pseudo-) anonymised data of orders from 2016 to 2018.\
 
-This is an R Markdown document. 
 
+
+Importing the libraries
 ```{r, echo = FALSE}
 library(ggplot2)
 library(dplyr)
 library(forcats)
+library(tidyverse)
 ```
 
+Reading the CSVs
 ```{r}
 customers <- read.csv("C:\\Users\\nikla\\Documents\\Uni\\Semester_3\\DASC\\Datasets\\BrazilianEcommerce\\olist_customers_dataset.csv")
 orders <- read.csv("C:\\Users\\nikla\\Documents\\Uni\\Semester_3\\DASC\\Datasets\\BrazilianEcommerce\\olist_orders_dataset.csv")
 order_items <- read.csv("C:\\Users\\nikla\\Documents\\Uni\\Semester_3\\DASC\\Datasets\\BrazilianEcommerce\\olist_order_items_dataset.csv")
 ```
 
-
+Joining the tables together
 ```{r}
 orders_customer_items <- orders %>%
   left_join(customers, "customer_id") %>%
   left_join(order_items, "order_id")
+
+head(orders_customer_items, n=10)
 ```
 
 In this code chunk, we create a new table which contains the average price per order for each state.
@@ -46,8 +53,9 @@ avg_order_item_price_by_state <- orders_customer_items %>%
 avg_order_item_price_by_state
 ```
 
+In this plot you can see the average price per order or each state. 
 ```{r}
-ggplot(data = avg_order_item_price_by_state, aes(fct_reorder(customer_state, avg_price), avg_price)) +
+ ggplot(data = avg_order_item_price_by_state, aes(fct_reorder(customer_state, avg_price), avg_price)) +
   geom_col(fill = "#FF6666") +
   ggtitle("Plot of the average price of one order per state") +
   xlab("State") + ylab("Average price per order") +
@@ -55,6 +63,21 @@ ggplot(data = avg_order_item_price_by_state, aes(fct_reorder(customer_state, avg
     plot.title = element_text(hjust = 0.5),
 )
 ```
+
+In this plot you can see each states revenue from 2017
+```{r}
+revenue_by_state <- orders_customer_items %>%
+  filter(str_split(order_approved_at, "-", 1) == 2017) %>%
+  group_by(customer_state) %>%
+  summarise(
+    customer_state = customer_state,
+    revenue = sum(price)
+  )
+revenue_by_state
+```
+
+
+
 
 # Notes
 - Sales per state
