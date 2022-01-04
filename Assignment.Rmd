@@ -26,16 +26,26 @@ Reading the CSVs
 customers <- read.csv("C:\\Users\\nikla\\Documents\\Uni\\Semester_3\\DASC\\Datasets\\BrazilianEcommerce\\olist_customers_dataset.csv")
 orders <- read.csv("C:\\Users\\nikla\\Documents\\Uni\\Semester_3\\DASC\\Datasets\\BrazilianEcommerce\\olist_orders_dataset.csv")
 order_items <- read.csv("C:\\Users\\nikla\\Documents\\Uni\\Semester_3\\DASC\\Datasets\\BrazilianEcommerce\\olist_order_items_dataset.csv")
+state_information <-read.csv("C:\\Users\\nikla\\Documents\\Uni\\Semester_3\\DASC\\Datasets\\BrazilianEcommerce\\brazil_state_information.csv", sep = ";")
 ```
+
+
 
 Joining the tables together
 ```{r}
 orders_customer_items <- orders %>%
   left_join(customers, "customer_id") %>%
   left_join(order_items, "order_id")
+```
 
+
+We want to focus the data analysis on one business year, therefore the data is filtered to only contain orders which have been approved in 2017
+```{r}
+orders_customer_items <- orders_customer_items %>%
+  filter(startsWith(order_approved_at, "2017"))
 head(orders_customer_items, n=10)
 ```
+
 
 In this code chunk, we create a new table which contains the average price per order for each state.
 Therefore we have to calculate the total order price first and after that we can group by the customer state and calculate the average.
@@ -57,26 +67,48 @@ In this plot you can see the average price per order or each state.
 ```{r}
  ggplot(data = avg_order_item_price_by_state, aes(fct_reorder(customer_state, avg_price), avg_price)) +
   geom_col(fill = "#FF6666") +
-  ggtitle("Plot of the average price of one order per state") +
-  xlab("State") + ylab("Average price per order") +
+  ggtitle("Average price of one order per state") +
+  xlab("State") + ylab("Average price per order in R$") +
   theme(
     plot.title = element_text(hjust = 0.5),
 )
 ```
 
-In this plot you can see each states revenue from 2017
+In the next step we want to take a look at the total revenue by each state. Afterwards we can compare it with the average price per order.
 ```{r}
 revenue_by_state <- orders_customer_items %>%
-  filter(str_split(order_approved_at, "-", 1) == 2017) %>%
   group_by(customer_state) %>%
   summarise(
-    customer_state = customer_state,
-    revenue = sum(price)
+    revenue = sum(price, na.rm = TRUE)
   )
 revenue_by_state
+
+ ggplot(data = revenue_by_state, aes(fct_reorder(customer_state, revenue), revenue)) +
+  geom_col(fill = "#FF6666") +
+  ggtitle("Total revenue per state") +
+  xlab("State") + ylab("Revenue in R$") +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+)
 ```
 
+This plot shows the pure amount of orders for each state.
+```{r}
+order_count_by_state <- orders_customer_items %>%
+  group_by(customer_state) %>%
+  summarise(
+    amountOfOrders = n()
+  )
 
+ ggplot(data = order_count_by_state, aes(fct_reorder(customer_state, amountOfOrders), amountOfOrders)) +
+  geom_col(fill = "#FF6666") +
+  ggtitle("Number of orders per state") +
+  xlab("State") + ylab("Amount of orders") +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+)
+```
+Comparing the 3 plots, we can see that São Paulo definetly makes 
 
 
 # Notes
