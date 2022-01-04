@@ -58,7 +58,7 @@ avg_order_item_price_by_state <- orders_customer_items %>%
   ) %>%
   group_by(customer_state) %>%
   summarise(
-    avg_price = round(mean(order_price, na.rm = TRUE), digits = 2)
+    avg_price = round(mean(order_price, na.rm = TRUE), digits = 20)
   )
 avg_order_item_price_by_state
 ```
@@ -108,10 +108,35 @@ order_count_by_state <- orders_customer_items %>%
     plot.title = element_text(hjust = 0.5),
 )
 ```
-Comparing the 3 plots, we can see that São Paulo definetly makes 
+
+Comparing the 3 plots, we can see that São Paulo definitely makes 
+
+Average amount of money one customer spends per state
+```{r}
+avg_money_spent <- orders_customer_items %>%
+  group_by(customer_id) %>%
+  summarise(
+    money_spent = sum(price),
+    customer_state = customer_state
+  ) %>%
+  group_by(customer_state) %>%
+  summarise(
+    avg_price = round(mean(money_spent, na.rm = TRUE), digits = 20)
+  )
+
+ ggplot(data = avg_money_spent, aes(fct_reorder(customer_state, avg_price), avg_price)) +
+  geom_col(fill = "#FF6666") +
+  ggtitle("Average price of one order per state") +
+  xlab("State") + ylab("Average price per order in R$") +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+)
+```
+
 
 
 # Notes
+- Compare avg. ppo with avg money spend by customers in one year
 - Sales per state
 - Monthly sales/revenue
 - Maybe search a data set which gives info about the economic performance of each state
