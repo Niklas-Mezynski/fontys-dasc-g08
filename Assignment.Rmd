@@ -58,7 +58,7 @@ avg_order_item_price_by_state <- orders_customer_items %>%
   ) %>%
   group_by(customer_state) %>%
   summarise(
-    avg_price = round(mean(order_price, na.rm = TRUE), digits = 20)
+    avg_price = round(mean(order_price, na.rm = TRUE), digits = 2)
   )
 avg_order_item_price_by_state
 ```
@@ -121,10 +121,10 @@ avg_money_spent <- orders_customer_items %>%
   ) %>%
   group_by(customer_state) %>%
   summarise(
-    avg_price = round(mean(money_spent, na.rm = TRUE), digits = 20)
+    avg = round(mean(money_spent, na.rm = TRUE), digits = 2)
   )
 
- ggplot(data = avg_money_spent, aes(fct_reorder(customer_state, avg_price), avg_price)) +
+ ggplot(data = avg_money_spent, aes(fct_reorder(customer_state, avg), avg)) +
   geom_col(fill = "#FF6666") +
   ggtitle("Average price of one order per state") +
   xlab("State") + ylab("Average price per order in R$") +
@@ -133,6 +133,42 @@ avg_money_spent <- orders_customer_items %>%
 )
 ```
 
+#Regression (Niklas)
+```{r}
+snens <- avg_money_spent %>%
+  left_join(state_information, c("customer_state" = "abbreviation"))
+snens$pop_per_sq_km <- (snens$population / snens$size)
+snens
+frist_regression <- lm(avg ~ gnp, data = snens)
+summary(frist_regression)
+plot (snens$pop_per_sq_km, snens$avg)
+#summary(lm(avg ~ gnp + population, data = snens))
+
+```
+
+```{r}
+revnue_state_info <- revenue_by_state %>%
+  left_join(state_information, c("customer_state" = "abbreviation"))
+revnue_state_info$pop_per_sq_km <- (revnue_state_info$population / revnue_state_info$size)
+#revnue_state_info <- revnue_state_info %>%
+ # filter(!(customer_state %in% c( "RR", "AP", "AC")))
+revnue_state_info <- revnue_state_info %>%
+  filter(!(customer_state %in% c( "SP")))
+revnue_state_info
+
+revenue_pop_regression <- lm(revenue ~ population, data = revnue_state_info)
+summary(frist_regression)
+
+plot (revnue_state_info$population, revnue_state_info$revenue)
+par(mfrow=c(2,2))
+plot (revenue_pop_regression)
+```
+Good stuff
+- Normal Q-Q (Residuals are normally distributed)
+- 
+
+Bad stuff:
+- Residuals vs Fitted is not really a straight line but it's okay (Residuals are a bit far away sometimes (26 - SP not fitting))
 
 
 # Notes
