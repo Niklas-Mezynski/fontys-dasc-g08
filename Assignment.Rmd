@@ -43,8 +43,12 @@ We want to focus the data analysis on one business year, therefore the data is f
 ```{r}
 orders_customer_items <- orders_customer_items %>%
   filter(startsWith(order_approved_at, "2017"))
+orders_customer_items <- transform(orders_customer_items, oreer_approved_at = str_split_fixed(order_approved_at, " ", 1))
+orders_customer_items <- transform(orders_customer_items, order_approved_at = as.Date(order_approved_at, format = "%Y-%m-%d"))
+orders_customer_items$month <- as.numeric(format(orders_customer_items$order_approved_at, "%m"))
 head(orders_customer_items, n=10)
 ```
+
 
 
 In this code chunk, we create a new table which contains the average price per order for each state.
@@ -133,6 +137,26 @@ avg_money_spent <- orders_customer_items %>%
 )
 ```
 
+## Revenue per month
+```{r}
+revenue_by_month <- orders_customer_items %>%
+  group_by(month) %>%
+  summarise(
+    revenue_by_month = sum(price, na.rm = TRUE)
+  ) 
+ggplot(data = revenue_by_month, aes(x = month, y = revenue_by_month)) +
+  geom_point(size=4, color = "#FF6666") +
+  geom_line(size = 1, color = "#FF6666") +
+  ggtitle("Monthly Revenue") +
+  xlab("Month (2017)") + ylab("Revenue in R$") +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+)
+
+```
+
+
+
 #Regression (Niklas)
 ```{r}
 snens <- avg_money_spent %>%
@@ -165,10 +189,27 @@ plot (revenue_pop_regression)
 ```
 Good stuff
 - Normal Q-Q (Residuals are normally distributed)
-- 
+- Scale-Location is quite okay, variance is spread equally
 
 Bad stuff:
 - Residuals vs Fitted is not really a straight line but it's okay (Residuals are a bit far away sometimes (26 - SP not fitting))
+
+
+# Monthly revenue regression
+```{r}
+monthly_revenue_reg <- lm(revenue_by_month ~ month, data = revenue_by_month)
+  
+summary(monthly_revenue_reg)
+par(mfrow=c(2,2))
+plot(monthly_revenue_reg)
+
+print("-----------!!!!!!!!!!!!-----------")
+monthly_revenue_reg <- lm(revenue_by_month ~ month, data = revenue_by_month[-c(11), ])
+  
+summary(monthly_revenue_reg)
+par(mfrow=c(2,2))
+plot(monthly_revenue_reg)
+```
 
 
 # Notes
