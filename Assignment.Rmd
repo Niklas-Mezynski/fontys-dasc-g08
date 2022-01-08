@@ -101,7 +101,8 @@ This plot shows the pure amount of orders for each state.
 order_count_by_state <- orders_customer_items %>%
   group_by(customer_state) %>%
   summarise(
-    amountOfOrders = n()
+    amountOfOrders = n(),
+    revenue = sum(price, na.rm = TRUE)
   )
 
  ggplot(data = order_count_by_state, aes(fct_reorder(customer_state, amountOfOrders), amountOfOrders)) +
@@ -111,6 +112,18 @@ order_count_by_state <- orders_customer_items %>%
   theme(
     plot.title = element_text(hjust = 0.5),
 )
+ 
+order_count_by_state %>%
+  #mutate_at(c("amountOfOrders", "revenue"), ~(scale(.) %>% as.vector)) %>%
+  transform(revenue = (revenue-min(revenue))/(max(revenue)-min(revenue)), amountOfOrders = (amountOfOrders-min(amountOfOrders))/(max(amountOfOrders)-min(amountOfOrders))) %>%
+  tidyr::pivot_longer(cols=c('amountOfOrders', 'revenue'), names_to='variable', values_to="value") %>%
+  ggplot(aes(x=fct_reorder(customer_state, value), y=value, fill=variable)) +
+  geom_col(position = "dodge") +
+  ggtitle("Amount of orders and the revenue compared for each state") +
+  xlab("State") + ylab("Normalized values") +
+  theme(
+     #axis.text.y=element_blank()
+  )
 ```
 
 Comparing the 3 plots, we can see that São Paulo definitely makes the most revenue. Which is not really surprising regarding the fact it is Brazil's most populous city.  
@@ -135,6 +148,8 @@ avg_money_spent <- orders_customer_items %>%
   theme(
     plot.title = element_text(hjust = 0.5),
 )
+
+ 
 ```
 
 ## Revenue per month
