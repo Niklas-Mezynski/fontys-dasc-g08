@@ -39,14 +39,69 @@ orders_customer_items <- orders %>%
 ```
 
 
-We want to focus the data analysis on one business year, therefore the data is filtered to only contain orders which have been approved in 2017
+We want to focus the data analysis on one business year, therefore the data is filtered to only contain orders which have been approved in 2017. The data now contains orders from 2017-01-05 to 2017-12-31.
 ```{r}
-orders_customer_items <- orders_customer_items %>%
-  filter(startsWith(order_approved_at, "2017"))
-orders_customer_items <- transform(orders_customer_items, oreer_approved_at = str_split_fixed(order_approved_at, " ", 1))
 orders_customer_items <- transform(orders_customer_items, order_approved_at = as.Date(order_approved_at, format = "%Y-%m-%d"))
+orders_customer_items <- orders_customer_items %>%
+  filter(format(order_approved_at, "%Y") == "2017")
 orders_customer_items$month <- as.numeric(format(orders_customer_items$order_approved_at, "%m"))
-head(orders_customer_items, n=10)
+head(orders_customer_items, n=5)
+```
+## Comparing the different states
+
+The next plots show the amount of orders per state from 2017 and the total revenue made by each state in 2017
+```{r}
+order_info_by_state <- orders_customer_items %>%
+  group_by(customer_state) %>%
+  summarise(
+    amountOfOrders = n(),
+    revenue = sum(price, na.rm = TRUE)
+  )
+
+#Order count plot
+ ggplot(data = order_info_by_state, aes(fct_reorder(customer_state, amountOfOrders), amountOfOrders)) +
+  geom_col(fill = "#FF6666") +
+  ggtitle("Number of orders per state") +
+  xlab("State") + ylab("Amount of orders") +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+)
+ 
+#Revenue plot
+ ggplot(data = order_info_by_state, aes(fct_reorder(customer_state, revenue), revenue)) +
+  geom_col(fill = "#FF6666") +
+  ggtitle("Total revenue per state") +
+  xlab("State") + ylab("Revenue in R$") +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+)
+ 
+```
+
+You can see that these variables seem to correlate. Which is clear regarding the fact that more orders bring a larger. 
+It is clearly visible as well that SP (São Paulo) is the most important state of brazil in terms of economy.
+
+```{r}
+#Both plots normalized
+# order_info_by_state %>%
+#   transform(revenue = (revenue-min(revenue))/(max(revenue)-min(revenue)), 
+#             amountOfOrders = (amountOfOrders-min(amountOfOrders))/(max(amountOfOrders)-min(amountOfOrders))) %>%
+#   tidyr::pivot_longer(cols=c('amountOfOrders', 'revenue'), names_to='variable', values_to="value") %>%
+#   ggplot(aes(x=fct_reorder(customer_state, value), y=value, fill=variable)) +
+#   geom_col(position = "dodge") +
+#   ggtitle("Amount of orders and the revenue compared for each state") +
+#   xlab("State") + ylab("Normalized values")
+
+order_info_by_state$amountOfOrders_scaled <- scale(order_info_by_state$amountOfOrders, center = FALSE, scale = TRUE)
+order_info_by_state$revenue_scaled <- scale(order_info_by_state$revenue, center = FALSE, scale = TRUE)
+
+order_info_by_state %>%
+  tidyr::pivot_longer(cols=c('amountOfOrders_scaled', 'revenue_scaled'), names_to='variable', values_to="value") %>%
+  ggplot(aes(x=fct_reorder(customer_state, value), y=value, fill=variable)) +
+  geom_col(position = "dodge") +
+  ggtitle("Amount of orders and the revenue compared for each state") +
+  xlab("State") + ylab("Normalized values")
+
 ```
 
 
@@ -85,8 +140,6 @@ revenue_by_state <- orders_customer_items %>%
   summarise(
     revenue = sum(price, na.rm = TRUE)
   )
-revenue_by_state
-
  ggplot(data = revenue_by_state, aes(fct_reorder(customer_state, revenue), revenue)) +
   geom_col(fill = "#FF6666") +
   ggtitle("Total revenue per state") +
@@ -96,35 +149,7 @@ revenue_by_state
 )
 ```
 
-This plot shows the pure amount of orders for each state.
-```{r}
-order_count_by_state <- orders_customer_items %>%
-  group_by(customer_state) %>%
-  summarise(
-    amountOfOrders = n(),
-    revenue = sum(price, na.rm = TRUE)
-  )
 
- ggplot(data = order_count_by_state, aes(fct_reorder(customer_state, amountOfOrders), amountOfOrders)) +
-  geom_col(fill = "#FF6666") +
-  ggtitle("Number of orders per state") +
-  xlab("State") + ylab("Amount of orders") +
-  theme(
-    plot.title = element_text(hjust = 0.5),
-)
- 
-order_count_by_state %>%
-  #mutate_at(c("amountOfOrders", "revenue"), ~(scale(.) %>% as.vector)) %>%
-  transform(revenue = (revenue-min(revenue))/(max(revenue)-min(revenue)), amountOfOrders = (amountOfOrders-min(amountOfOrders))/(max(amountOfOrders)-min(amountOfOrders))) %>%
-  tidyr::pivot_longer(cols=c('amountOfOrders', 'revenue'), names_to='variable', values_to="value") %>%
-  ggplot(aes(x=fct_reorder(customer_state, value), y=value, fill=variable)) +
-  geom_col(position = "dodge") +
-  ggtitle("Amount of orders and the revenue compared for each state") +
-  xlab("State") + ylab("Normalized values") +
-  theme(
-     #axis.text.y=element_blank()
-  )
-```
 
 Comparing the 3 plots, we can see that São Paulo definitely makes the most revenue. Which is not really surprising regarding the fact it is Brazil's most populous city.  
 
@@ -143,12 +168,40 @@ avg_money_spent <- orders_customer_items %>%
 
  ggplot(data = avg_money_spent, aes(fct_reorder(customer_state, avg), avg)) +
   geom_col(fill = "#FF6666") +
-  ggtitle("Average price of one order per state") +
-  xlab("State") + ylab("Average price per order in R$") +
+  ggtitle("Average money spent by one customer per state") +
+  xlab("State") + ylab("Average money spent in 2017 in R$") +
   theme(
     plot.title = element_text(hjust = 0.5),
 )
+ 
+orders_customer_items %>%
+  group_by(customer_id) %>%
+  summarise(
+    money_spent = sum(price),
+    customer_state = customer_state
+  ) %>%
+  filter (customer_state %in% c("SP", "RJ", "MG", "RS")) %>%
+  filter (money_spent < 1000) %>%
+  left_join(state_information, c("customer_state" = "abbreviation")) %>%
+  ggplot(mapping = aes(x = state, y = money_spent)) +
+  geom_boxplot(mapping = aes(color = state)) +
+  ggtitle("Money spent by one customer per state") +
+  xlab("State") + ylab("Money spent in 2017 in R$") +
+  theme (
+    plot.title = element_text(hjust = 0.5),
+  )
 
+
+# orders_customer_items %>%
+#   group_by(customer_id) %>%
+#   summarise(
+#     money_spent = sum(price),
+#     customer_state = customer_state
+#   ) %>%
+#   filter (customer_state %in% c("SP", "RJ", "MG", "RS")) %>%
+#   filter (money_spent < 1000) %>%
+#   ggplot(mapping = aes(x = customer_state, y = money_spent, fill = customer_state)) +
+#   geom_violin()
  
 ```
 
