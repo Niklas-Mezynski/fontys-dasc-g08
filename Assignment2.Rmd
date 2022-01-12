@@ -1,0 +1,340 @@
+---
+title: "Assignment"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Introduction
+This dataset gives information about the largest online store in Brazil - 'Olist'. Small businesses can use the platform to sell their products on the side and ship them by using the Olist logistic partners.\
+The dataset contains (pseudo-) anonymised data of orders from 2016 to 2018.\
+
+
+
+Importing the libraries
+```{r, echo = FALSE}
+library(ggplot2)
+library(dplyr)
+library(forcats)
+library(tidyverse)
+library(data.table)
+library(lubridate)
+```
+
+Reading the CSVs (Niklas)
+```{r}
+customers <- read.csv("C:\\Users\\nikla\\Documents\\Uni\\Semester_3\\DASC\\Datasets\\BrazilianEcommerce\\olist_customers_dataset.csv")
+orders <- read.csv("C:\\Users\\nikla\\Documents\\Uni\\Semester_3\\DASC\\Datasets\\BrazilianEcommerce\\olist_orders_dataset.csv")
+order_items <- read.csv("C:\\Users\\nikla\\Documents\\Uni\\Semester_3\\DASC\\Datasets\\BrazilianEcommerce\\olist_order_items_dataset.csv")
+state_information <-read.csv("C:\\Users\\nikla\\Documents\\Uni\\Semester_3\\DASC\\Datasets\\BrazilianEcommerce\\brazil_state_information.csv", sep = ";")
+
+```
+Reading the CSVs (Felix)
+```{r}
+geolocation <- read.csv("C:/Users/Felix/Documents/Fontys/DASC/brazil/olist_geolocation_dataset.csv")
+orders <- read.csv("C:/Users/Felix/Documents/Fontys/DASC/brazil/olist_orders_dataset.csv")
+customers <- read.csv("C:/Users/Felix/Documents/Fontys/DASC/brazil/olist_customers_dataset.csv")
+order_items <- read.csv("C:/Users/Felix/Documents/Fontys/DASC/brazil/olist_order_items_dataset.csv")
+products <- read.csv("C:/Users/Felix/Documents/Fontys/DASC/brazil/olist_products_dataset.csv")
+reviews <- read.csv("C:/Users/Felix/Documents/Fontys/DASC/brazil/olist_order_reviews_dataset.csv")
+seller <- read.csv("C:/Users/Felix/Documents/Fontys/DASC/brazil/olist_order_reviews_dataset.csv")
+```
+
+
+Joining the tables together
+```{r}
+orders_customer_items <- orders %>%
+  left_join(customers, "customer_id") %>%
+  left_join(order_items, "order_id")
+```
+
+We want to focus the data analysis on one business year, therefore the data is filtered to only contain orders which have been approved in 2017
+```{r}
+orders_customer_items <- orders_customer_items %>%
+  filter(startsWith(order_approved_at, "2017"))
+orders_customer_items <- transform(orders_customer_items, oreer_approved_at = str_split_fixed(order_approved_at, " ", 1))
+orders_customer_items <- transform(orders_customer_items, order_approved_at = as.Date(order_approved_at, format = "%Y-%m-%d"))
+orders_customer_items$month <- as.numeric(format(orders_customer_items$order_approved_at, "%m"))
+head(orders_customer_items, n=10)
+```
+
+Revenue from top 10 sellers for 2017
+```{r}
+order_customer_items <- orders %>%
+  left_join(reviews, "order_id") %>%
+  left_join(order_items, "order_id") %>%
+  left_join(products, "product_id")
+
+
+mlp <- order_product_items_review %>%
+  group_by(seller_id) %>%
+  summarise(order_price = sum(price),
+            seller_id = seller_id
+            )
+  
+sum_of_sold_products <- distinct(mlp)
+
+sorted <- sum_of_sold_products %>%
+    arrange(desc(order_price)) %>% 
+    filter(order_price > 128111.19)
+
+#anstatt festen wert top 10
+
+ggplot(sorted) + 
+  geom_bar(mapping = aes(fct_reorder(seller_id, order_price), order_price),fill = "#FF6666", color = "black", stat= "identity") + 
+  theme(axis.text.x=element_blank()) +
+  ggtitle("Top 10 Sellers") +
+  xlab("seller") +
+  ylab("sales volume")
+
+#seller_id umbenennen
+
+```
+From this data you can see, that the biggest genreated revenue per seller, ranges from 135241.7R_Dollar to 229472.6R-Dollar.
+
+
+
+Best reviewed Sellers. Count of reviews having at least 4 Stars
+```{r}
+order_product_items_review <- orders %>%
+  left_join(reviews, "order_id") %>%
+  left_join(order_items, "order_id") %>%
+  left_join(products, "product_id")
+
+
+seller_group <- order_product_items_review %>%
+  group_by(seller_id) %>%
+  summarise(score = sum(review_score >= 4, na.rm = TRUE)) %>%
+  arrange(desc(score)) %>%
+  filter(score >= 883)
+
+ggplot(seller_group) + 
+  geom_bar(mapping = aes(fct_reorder(seller_id, score), score), fill = "#FF6666", color = "black", stat= "identity") +
+  theme(axis.text.x=element_blank()) +
+  ggtitle("Sellers with best revision") +
+  xlab("seller") + 
+  ylab("Amount of at least 4 Star reviews")
+
+#seller_id umbenennen
+
+```
+This data represent the best sellers on the platfrom regarding the amount of good revisions(the amount of at least 4 star revision).
+
+
+
+Total sales per category
+```{r}
+best_category <- order_product_items_review %>% 
+  group_by(product_category_name) %>%
+  summarise(x = sum(price)) %>% filter(product_category_name != "NA") %>%
+  arrange(desc(x)) %>%
+  filter(x >= 919640.54) %>%
+  transform(x = x/1000)
+  
+ggplot(best_category) + 
+  geom_bar(mapping = aes(fct_reorder(product_category_name, x), x), fill = "#FF6666", color = "black", stat= "identity") +
+  ggtitle("Best Categorys regarding sales volume") +
+  xlab("Category") + 
+  ylab("Sales volume in 1000R$")
+
+
+  
+
+```
+This data show the five best selling categorys on the platform. You can see that bleza saude(english: beauty and health) is the best selling category.
+
+
+
+In this code chunk, we create a new table which contains the average price per order for each state.
+Therefore we have to calculate the total order price first and after that we can group by the customer state and calculate the average.
+```{r}
+avg_order_item_price_by_state <- orders_customer_items %>%
+  group_by(order_id) %>%
+  summarise(
+    order_price = sum(price),
+    customer_state = customer_state
+  ) %>%
+  group_by(customer_state) %>%
+  summarise(
+    avg_price = round(mean(order_price, na.rm = TRUE), digits = 2)
+  )
+avg_order_item_price_by_state
+```
+
+In this plot you can see the average price per order or each state. 
+```{r}
+ ggplot(data = avg_order_item_price_by_state, aes(fct_reorder(customer_state, avg_price), avg_price)) +
+  geom_col(fill = "#FF6666") +
+  ggtitle("Average price of one order per state") +
+  xlab("State") + ylab("Average price per order in R$") +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+)
+```
+
+In the next step we want to take a look at the total revenue by each state. Afterwards we can compare it with the average price per order.
+```{r}
+revenue_by_state <- orders_customer_items %>%
+  group_by(customer_state) %>%
+  summarise(
+    revenue = sum(price, na.rm = TRUE)
+  )
+revenue_by_state
+
+ ggplot(data = revenue_by_state, aes(fct_reorder(customer_state, revenue), revenue)) +
+  geom_col(fill = "#FF6666") +
+  ggtitle("Total revenue per state") +
+  xlab("State") + ylab("Revenue in R$") +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+)
+```
+
+This plot shows the pure amount of orders for each state.
+```{r}
+order_count_by_state <- orders_customer_items %>%
+  group_by(customer_state) %>%
+  summarise(
+    amountOfOrders = n(),
+    revenue = sum(price, na.rm = TRUE)
+  )
+
+ ggplot(data = order_count_by_state, aes(fct_reorder(customer_state, amountOfOrders), amountOfOrders)) +
+  geom_col(fill = "#FF6666") +
+  ggtitle("Number of orders per state") +
+  xlab("State") + ylab("Amount of orders") +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+)
+ 
+order_count_by_state %>%
+  #mutate_at(c("amountOfOrders", "revenue"), ~(scale(.) %>% as.vector)) %>%
+  transform(revenue = (revenue-min(revenue))/(max(revenue)-min(revenue)), amountOfOrders = (amountOfOrders-min(amountOfOrders))/(max(amountOfOrders)-min(amountOfOrders))) %>%
+  tidyr::pivot_longer(cols=c('amountOfOrders', 'revenue'), names_to='variable', values_to="value") %>%
+  ggplot(aes(x=fct_reorder(customer_state, value), y=value, fill=variable)) +
+  geom_col(position = "dodge") +
+  ggtitle("Amount of orders and the revenue compared for each state") +
+  xlab("State") + ylab("Normalized values") +
+  theme(
+     #axis.text.y=element_blank()
+  )
+```
+
+Comparing the 3 plots, we can see that São Paulo definitely makes the most revenue. Which is not really surprising regarding the fact it is Brazil's most populous city.  
+
+Average amount of money one customer spends per state
+```{r}
+avg_money_spent <- orders_customer_items %>%
+  group_by(customer_id) %>%
+  summarise(
+    money_spent = sum(price),
+    customer_state = customer_state
+  ) %>%
+  group_by(customer_state) %>%
+  summarise(
+    avg = round(mean(money_spent, na.rm = TRUE), digits = 2)
+  )
+
+ ggplot(data = avg_money_spent, aes(fct_reorder(customer_state, avg), avg)) +
+  geom_col(fill = "#FF6666") +
+  ggtitle("Average price of one order per state") +
+  xlab("State") + ylab("Average price per order in R$") +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+)
+
+ 
+```
+
+## Revenue per month
+```{r}
+revenue_by_month <- orders_customer_items %>%
+  group_by(month) %>%
+  summarise(
+    revenue_by_month = sum(price, na.rm = TRUE)
+  ) 
+ggplot(data = revenue_by_month, aes(x = month, y = revenue_by_month)) +
+  geom_point(size=4, color = "#FF6666") +
+  geom_line(size = 1, color = "#FF6666") +
+  ggtitle("Monthly Revenue") +
+  xlab("Month (2017)") + ylab("Revenue in R$") +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+) +
+  geom_smooth(method =lm, level=0.95)
+
+```
+
+
+
+#Regression (Niklas)
+```{r}
+snens <- avg_money_spent %>%
+  left_join(state_information, c("customer_state" = "abbreviation"))
+snens$pop_per_sq_km <- (snens$population / snens$size)
+snens
+frist_regression <- lm(avg ~ gnp, data = snens)
+summary(frist_regression)
+plot (snens$pop_per_sq_km, snens$avg)
+#summary(lm(avg ~ gnp + population, data = snens))
+
+```
+
+```{r}
+revnue_state_info <- revenue_by_state %>%
+  left_join(state_information, c("customer_state" = "abbreviation"))
+revnue_state_info$pop_per_sq_km <- (revnue_state_info$population / revnue_state_info$size)
+#revnue_state_info <- revnue_state_info %>%
+ # filter(!(customer_state %in% c( "RR", "AP", "AC")))
+revnue_state_info <- revnue_state_info %>%
+  filter(!(customer_state %in% c( "SP")))
+
+revenue_pop_regression <- lm(revenue ~ population, data = revnue_state_info)
+summary(revenue_pop_regression)
+
+ggplot(data = revnue_state_info, aes(x=population, y=revenue)) + geom_point() + geom_smooth(method =lm, level=0.95)
+par(mfrow=c(2,2))
+plot (revenue_pop_regression)
+```
+Good stuff
+- Normal Q-Q (Residuals are normally distributed)
+- Scale-Location is quite okay, variance is spread equally
+
+Bad stuff:
+- Residuals vs Fitted is not really a straight line but it's okay (Residuals are a bit far away sometimes (26 - SP not fitting))
+
+
+# Monthly revenue regression
+```{r}
+monthly_revenue_reg <- lm(revenue_by_month ~ month, data = revenue_by_month)
+  
+summary(monthly_revenue_reg)
+par(mfrow=c(2,2))
+plot(monthly_revenue_reg)
+
+print("-----------!!!!!!!!!!!!-----------")
+monthly_revenue_reg <- lm(revenue_by_month ~ month, data = revenue_by_month[-c(11), ])
+  
+summary(monthly_revenue_reg)
+par(mfrow=c(2,2))
+plot(monthly_revenue_reg)
+```
+
+
+
+#Regression(Felix)
+```{r}
+
+```
+
+
+
+# Notes
+- Compare avg. ppo with avg money spend by customers in one year
+- Sales per state
+- Monthly sales/revenue
+- Maybe search a data set which gives info about the economic performance of each state
+
+
