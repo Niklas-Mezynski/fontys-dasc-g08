@@ -60,9 +60,9 @@ orders_customer_items$month <- as.numeric(format(orders_customer_items$order_app
 head(orders_customer_items, n=10)
 ```
 
-Revenue from top 10 sellers fro 2017
+Revenue from top 10 sellers for 2017
 ```{r}
-order_product_items_review <- orders %>%
+order_customer_items <- orders %>%
   left_join(reviews, "order_id") %>%
   left_join(order_items, "order_id") %>%
   left_join(products, "product_id")
@@ -92,6 +92,9 @@ ggplot(sorted) +
 #seller_id umbenennen
 
 ```
+From this data you can see, that the biggest genreated revenue per seller, ranges from 135241.7R_Dollar to 229472.6R-Dollar.
+
+
 
 Best reviewed Sellers. Count of reviews having at least 4 Stars
 ```{r}
@@ -117,6 +120,9 @@ ggplot(seller_group) +
 #seller_id umbenennen
 
 ```
+This data represent the best sellers on the platfrom regarding the amount of good revisions(the amount of at least 4 star revision).
+
+
 
 Total sales per category
 ```{r}
@@ -137,7 +143,7 @@ ggplot(best_category) +
   
 
 ```
-
+This data show the five best selling categorys on the platform. You can see that bleza saude(english: beauty and health) is the best selling category.
 
 
 
@@ -315,6 +321,14 @@ summary(monthly_revenue_reg)
 par(mfrow=c(2,2))
 plot(monthly_revenue_reg)
 ```
+
+
+
+#Regression(Felix)
+```{r}
+
+```
+
 
 
 # Notes
