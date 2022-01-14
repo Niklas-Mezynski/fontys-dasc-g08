@@ -1,0 +1,384 @@
+---
+title: "Assignment"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+# Introduction
+This dataset gives information about the largest online store in Brazil - 'Olist'. Small businesses can use the platform to sell their products on the side and ship them by using the Olist logistic partners.\
+The dataset contains (pseudo-) anonymised data of orders from 2016 to 2018.\
+
+# Data exploratory 
+
+Importing the libraries
+```{r, echo = FALSE}
+library(ggplot2)
+library(dplyr)
+library(forcats)
+library(tidyverse)
+#library(car)
+library(sqldf)
+```
+
+
+```{r}
+#Reading the CSVs(Niklas)
+# customers <- read.csv("C:\\Users\\nikla\\Documents\\Uni\\Semester_3\\DASC\\Datasets\\BrazilianEcommerce\\olist_customers_dataset.csv")
+# orders <- read.csv("C:\\Users\\nikla\\Documents\\Uni\\Semester_3\\DASC\\Datasets\\BrazilianEcommerce\\olist_orders_dataset.csv")
+# order_items <- read.csv("C:\\Users\\nikla\\Documents\\Uni\\Semester_3\\DASC\\Datasets\\BrazilianEcommerce\\olist_order_items_dataset.csv")
+# state_information <-read.csv("C:\\Users\\nikla\\Documents\\Uni\\Semester_3\\DASC\\Datasets\\BrazilianEcommerce\\brazil_state_information.csv", sep = ";")
+```
+
+
+```{r}
+#Reading the CSVs(Felix)
+orders <- read.csv("C:/Users/Felix/Documents/Fontys/DASC/brazil/olist_orders_dataset.csv")
+customers <- read.csv("C:/Users/Felix/Documents/Fontys/DASC/brazil/olist_customers_dataset.csv")
+order_items <- read.csv("C:/Users/Felix/Documents/Fontys/DASC/brazil/olist_order_items_dataset.csv")
+products <- read.csv("C:/Users/Felix/Documents/Fontys/DASC/brazil/olist_products_dataset.csv")
+reviews <- read.csv("C:/Users/Felix/Documents/Fontys/DASC/brazil/olist_order_reviews_dataset.csv")
+seller <- read.csv("C:/Users/Felix/Documents/Fontys/DASC/brazil/olist_order_reviews_dataset.csv")
+state_information <-read.csv("C:/Users/Felix/Documents/Fontys/DASC/brazil/brazil_state_information.csv", sep = ";")
+```
+
+Joining the tables together
+```{r}
+orders_customer_items <- orders %>%
+  left_join(customers, "customer_id") %>%
+  left_join(order_items, "order_id") %>%
+  left_join(products, "product_id") %>%
+  left_join(seller, "order_id")
+
+```
+
+
+We want to focus the data analysis on one business year, therefore the data is filtered to only contain orders which have been approved in 2017. The data now contains orders from 2017-01-05 to 2017-12-31.
+```{r}
+orders_customer_items <- transform(orders_customer_items, order_approved_at = as.Date(order_approved_at, format = "%Y-%m-%d"))
+orders_customer_items <- orders_customer_items %>%
+  filter(format(order_approved_at, "%Y") == "2017")
+orders_customer_items$month <- as.numeric(format(orders_customer_items$order_approved_at, "%m"))
+head(orders_customer_items, n=5)
+```
+## Comparing the different states
+
+The next plots show the amount of orders per state from 2017 and the total revenue made by each state in 2017
+```{r}
+order_info_by_state <- orders_customer_items %>%
+  group_by(customer_state) %>%
+  summarise(
+    amountOfOrders = n(),
+    revenue = sum(price, na.rm = TRUE)
+  )
+
+#Order count plot
+ ggplot(data = order_info_by_state, aes(fct_reorder(customer_state, amountOfOrders), amountOfOrders)) +
+  geom_col(fill = "#FF6666") +
+  ggtitle("Number of orders per state") +
+  xlab("State") + ylab("Amount of orders") +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+)
+ 
+#Revenue plot
+ ggplot(data = order_info_by_state, aes(fct_reorder(customer_state, revenue), revenue)) +
+  geom_col(fill = "#FF6666") +
+  ggtitle("Total revenue per state") +
+  xlab("State") + ylab("Revenue in R$") +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+)
+ 
+```
+
+You can see that these variables seem to correlate. Which is clear regarding the fact that more orders bring a larger. 
+It is clearly visible that SP (São Paulo) by far has the highest market volume.
+Comparing the 3 plots, we can see that São Paulo definitely makes the most revenue. Which is not really surprising regarding the fact it is Brazil's most populous and wealthiest state.
+
+The next plot compares the amount of orders with the revenue using normalized data.
+```{r}
+#Both plots normalized
+# order_info_by_state %>%
+#   transform(revenue = (revenue-min(revenue))/(max(revenue)-min(revenue)), 
+#             amountOfOrders = (amountOfOrders-min(amountOfOrders))/(max(amountOfOrders)-min(amountOfOrders))) %>%
+#   tidyr::pivot_longer(cols=c('amountOfOrders', 'revenue'), names_to='variable', values_to="value") %>%
+#   ggplot(aes(x=fct_reorder(customer_state, value), y=value, fill=variable)) +
+#   geom_col(position = "dodge") +
+#   ggtitle("Amount of orders and the revenue compared for each state") +
+#   xlab("State") + ylab("Normalized values")
+
+order_info_by_state$amountOfOrders_scaled <- scale(order_info_by_state$amountOfOrders, center = FALSE, scale = TRUE)
+order_info_by_state$revenue_scaled <- scale(order_info_by_state$revenue, center = FALSE, scale = TRUE)
+
+order_info_by_state %>%
+  pivot_longer(cols=c('amountOfOrders_scaled', 'revenue_scaled'), names_to='variable', values_to="value") %>%
+  ggplot(aes(x=fct_reorder(customer_state, value), y=value, fill=variable)) +
+  geom_col(position = "dodge") +
+  ggtitle("Amount of orders and the revenue compared for each state") +
+  xlab("State") + ylab("Normalized values")
+
+```
+
+You can see that there is a correlation between both variables, although the ratio between the amount and the revenue varies a bit.
+So in the next step we want to take a look at the average price of one order grouped by the different states.
+
+So we create a new table which contains the average price per order for each state.
+Therefore we have to calculate the total order price first and after that we can group by the customer state and calculate the average.
+```{r}
+avg_order_item_price_by_state <- orders_customer_items %>%
+  group_by(order_id) %>%
+  summarise(
+    order_price = sum(price),
+    customer_state = customer_state
+  ) %>%
+  group_by(customer_state) %>%
+  summarise(
+    avg_price = round(mean(order_price, na.rm = TRUE), digits = 2)
+  )
+```
+
+Here is the bar chart showing these values.
+```{r}
+ ggplot(data = avg_order_item_price_by_state, aes(fct_reorder(customer_state, avg_price), avg_price)) +
+  geom_col(fill = "#FF6666") +
+  ggtitle("Average price of one order per state") +
+  xlab("State") + ylab("Average price per order in R$") +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+)
+```
+
+You can clearly see that there is a huge variance in the price per one order for the different states.
+Ranging from 82.52R\$ in Roraima to 241.88R\$ in Alagoas.
+
+In the next plot we want to take a look at the money customers spend in one year. Therefore we take a look at the distribution of that value comparing the four states that made the most revenue in 2017 (SP, RJ, MG, RS).  
+We filtered out customers spending more then 1000R$ because there seem to be a few major customers which would make the plot unreadable.
+```{r}
+# avg_money_spent <- orders_customer_items %>%
+#   group_by(customer_id) %>%
+#   summarise(
+#     money_spent = sum(price),
+#     customer_state = customer_state
+#   ) %>%
+#   group_by(customer_state) %>%
+#   summarise(
+#     avg_money = round(mean(money_spent, na.rm = TRUE), digits = 2)
+#   )
+# 
+#  ggplot(data = avg_money_spent, aes(fct_reorder(customer_state, avg_money), avg_money)) +
+#   geom_col(fill = "#FF6666") +
+#   ggtitle("Average money spent by one customer per state") +
+#   xlab("State") + ylab("Average money spent in 2017 in R$") +
+#   theme(
+#     plot.title = element_text(hjust = 0.5),
+# )
+ 
+orders_customer_items %>%
+  group_by(customer_id) %>%
+  summarise(
+    money_spent = sum(price),
+    customer_state = customer_state
+  ) %>%
+  filter (customer_state %in% c("SP", "RJ", "MG", "RS")) %>%
+  filter (money_spent < 1000) %>%
+  left_join(state_information, c("customer_state" = "abbreviation")) %>%
+  ggplot(mapping = aes(x = fct_reorder(state, money_spent), y = money_spent)) +
+  geom_boxplot(mapping = aes(color = state)) +
+  ggtitle("Money spent by one customer per state") +
+  xlab("State") + ylab("Money spent in 2017 in R$") +
+  theme (
+    plot.title = element_text(hjust = 0.5),
+  ) + geom_vline(xintercept = 2.5)
+
+
+# orders_customer_items %>%
+#   group_by(customer_id) %>%
+#   summarise(
+#     money_spent = sum(price),
+#     customer_state = customer_state
+#   ) %>%
+#   filter (customer_state %in% c("SP", "RJ", "MG", "RS")) %>%
+#   filter (money_spent < 1000) %>%
+#   ggplot(mapping = aes(x = customer_state, y = money_spent, fill = customer_state)) +
+#   geom_violin()
+ 
+```
+
+Although São Paulo makes the most revenue by far, the distribution seems to be almost equal, The median is almost the same and the 50\% interval is almost the same. So the it looks like there is another variables, influencing the revenue made by a state. So let us take a look at the revenue made by a state compared with it's population.
+```{r}
+revnue_state_info <- order_info_by_state %>%
+  left_join(state_information, c("customer_state" = "abbreviation"))
+revnue_state_info$pop_per_sq_km <- (revnue_state_info$population / revnue_state_info$size)
+#revnue_state_info <- revnue_state_info %>%
+ # filter(!(customer_state %in% c( "RR", "AP", "AC")))
+revnue_state_info <- revnue_state_info %>%
+  # (!(customer_state %in% c("SP")))
+  filter(!population < 1000)
+
+ggplot(data = revnue_state_info, aes(x=population, y=revenue)) + geom_point() #+ geom_smooth(method =lm, level=0.95)
+```
+
+This looks like there is a correlation between those variables. This will be analyzed in detail in the Regression part of this Assignment.
+
+# Sellers  
+Revenue from top 10 sellers for 2017
+```{r}
+mlp <- orders_customer_items %>%
+  group_by(seller_id) %>%
+  summarise(order_price = sum(price),
+            seller_id = seller_id
+            )
+
+sum_of_sold_products <- distinct(mlp)
+
+sorted <- sum_of_sold_products %>%
+    arrange(desc(order_price))
+
+sorted <- sqldf("SELECT * FROM sorted LIMIT 10")
+
+ggplot(sorted) + 
+  geom_bar(mapping = aes(fct_reorder(seller_id, order_price), order_price),fill = "#FF6666", color = "black", stat= "identity") + 
+  theme(axis.text.x=element_blank()) +
+  ggtitle("Top 10 Sellers") +
+  xlab("seller") +
+  ylab("sales volume")
+
+```
+
+From this data you can see, that the biggest genereated revenue per seller, ranges from 135241.7R_Dollar to 229472.6R-Dollar.
+
+Best reviewed Sellers. Count of reviews having at least 4 Stars
+```{r}
+seller_group <- orders_customer_items %>%
+  group_by(seller_id) %>%
+  summarise(score = sum(review_score >= 4, na.rm = TRUE)) %>%
+  arrange(desc(score)) 
+
+seller_group <- sqldf("select * from seller_group LIMIT 10")
+
+ggplot(seller_group) + 
+  geom_bar(mapping = aes(fct_reorder(seller_id, score), score), fill = "#FF6666", color = "black", stat= "identity") +
+  theme(axis.text.x=element_blank()) +
+  ggtitle("Sellers with best revision") +
+  xlab("seller") + 
+  ylab("Amount of at least 4 Star reviews")
+
+```
+
+This data represent the best sellers on the platfrom regarding the amount of good revisions(the amount of at least 4 star revision).
+
+Total sales per category
+```{r}
+best_category <- orders_customer_items %>% 
+  group_by(product_category_name) %>%
+  summarise(x = sum(price)) %>% filter(product_category_name != "NA") %>%
+  arrange(desc(x)) %>%
+  transform(x = x/1000)
+
+best_category <- sqldf("select * from best_category LIMIT 5")
+  
+ggplot(best_category) + 
+  geom_bar(mapping = aes(fct_reorder(product_category_name, x), x), fill = "#FF6666", color = "black", stat= "identity") +
+  ggtitle("Best Categorys regarding sales volume") +
+  xlab("Category") + 
+  ylab("Sales volume in 1000R$")
+
+```
+
+This data show the five best selling categorys on the platform. You can see that bleza saude(english: beauty and health) is the best selling category.
+
+
+# Regression (Niklas)
+The first regression model I thought of, was to predict the revenue made by a state depending on the population of that state. There are 3 states in Brazil with a population of less than  1000, so I decided to exclude them because they are not representative enough. Below are the results of this regression model. 
+```{r}
+revenue_pop_regression <- lm(revenue ~ population, data = revnue_state_info)
+summary(revenue_pop_regression)
+par(mfrow=c(2,2))
+plot (revenue_pop_regression)
+```
+
+Looking at the summary of the regression, it seems to fit quite well. The p-value is pretty low and the R-squared value is high. That means that the data values fit on the regression model quite well.  
+The standard error for the revenue is a bit high with about 38330R$ but we are talking about large revenue numbers here so that is still okay.  
+Regarding the regression plots, there is one outlier, which you can see in the Normal Q-Q plot and especially the Scale-Location plot.   The number 23 which represents the state São Paulo. This value probably stands out a bit because São Paulo is like the center of commerce in Brazil. Therefore I think it is acceptable that this data point stands out a bit.  
+Overall I would say the regression model fits the 4 assumptions made for a linear regression.  
+So how to interpret the regression outcome now?  
+So what the linear regression model tells us now, is that the the revenue would start at about -151200R\$ for a population of 0, which does not really make sense in this context but in this model I don't want to predict the revenue for states with low population, that is not really significant, instead we are dealing with population numbers of over 1 million. The other estimate value tells us, for each increase in the population by 1, the revenue generated by that state will increase by 0.0525R\$.  
+To conclude I would say the regression model can predict the the revenue a state will generate depending on the population. Not perfect but it can give an approximation.  
+So I thought which variable could also affect the revenue made by a state. I came up with the idea to include the GNP (gross national product) of the state into the regression model. So first of all I checked if these two variables are collinear. Therefore I use the "cor()" function to see if the variables correlate.  
+```{r}
+cor(revnue_state_info$population, revnue_state_info$gnp)
+```
+A value near 0 is good here, so we can assume that there is no collinearity between these variables. So below we see the results of the regression with both variables, the population and GNP as predictors for the revenue.  
+
+
+```{r}
+# REVENUE ~ GNP + POP
+revnue_state_info2 <- order_info_by_state %>%
+  left_join(state_information, c("customer_state" = "abbreviation"))
+revnue_state_info2$pop_per_sq_km <- (revnue_state_info2$population / revnue_state_info2$size)
+revnue_state_info2 <- revnue_state_info2 %>%
+  #filter(customer_state != "SP")
+  filter(!population < 1000)
+revenue_gnp_regression <- lm(revenue ~ gnp + population, data = revnue_state_info2)
+##Collinearity check
+#vif(revenue_gnp_regression)
+summary(revenue_gnp_regression)
+par(mfrow=c(2,2))
+plot (revenue_gnp_regression)
+
+```
+
+The summary show that it looks like the gnp can explain the revenue made by that state as well. The estimate for the population almost stays the same (so not a strong collinearity) and has quite a high impact on the revenue. The p-value is really low as well. So let's make a partial F-test in order to check if this full model can be preferred over the partial model.  
+```{r}
+anova(revenue_pop_regression, revenue_gnp_regression)
+```
+The low P-value right here shows that we can accept the alternative hypothesis, that the full model explains the relationship better than the partial one.  
+To conclude, São Paulo is still a bit of an outlier, but that can be explained by the fact that it is much more extreme in comparison to the other states.  
+I think this linear model fits pretty good in terms of predicting the revenue given the two variables population and GNP.  
+
+
+#Regression(Felix)
+# Monthly revenue regression
+This regression model, predicts the revenue for the months of a year. Below there are the results for of the regression.
+```{r}
+ggplot(data = revenue_by_month, aes(x = month, y = revenue_by_month)) +
+  geom_point(size=4, color = "#FF6666") +
+  geom_line(size = 1, color = "#FF6666") +
+  ggtitle("Monthly Revenue") +
+  xlab("Month (2017)") + ylab("Revenue in R$") +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+) +
+  geom_smooth(method =lm, level=0.95)
+
+monthly_revenue_reg <- lm(revenue_by_month ~ month, data = revenue_by_month)
+  
+summary(monthly_revenue_reg)
+par(mfrow=c(2,2))
+plot(monthly_revenue_reg)
+
+print("Below is the regressionmodel without the 11th month")
+
+monthly_revenue_reg <- lm(revenue_by_month ~ month, data = revenue_by_month[-c(11), ])
+  
+summary(monthly_revenue_reg)
+par(mfrow=c(2,2))
+plot(monthly_revenue_reg)
+```
+You can see that the 11th month is out of line, which ends with a R-squared value not that high. This can be traced back to events like black friday, which is a huge thing in brazil. Because of this, a regression model without the 11th month was also made. Here you can see that the prediction is better, that can be seen by the result values, with an high R-squared of 0.9311 and low a p-value of 0.792e-07. A standard error of 31415 is also ok if you keep in mind that there are millions of revenue.  
+Regarding QQ-plot of the four plots of the regression you can see that in the both cases(with all months and without the 11th month) there are some deviations, what is normal because the revenue in some months like november is significant higher due to things like black friday. This can also be seen by the resudials vs leverage where the 11 month is in the right top. So overall it could be said that the plots are fitting well.  
+In conclusion, the results of the regression model show that it can predict the monthly revenue quit well, except the 11th month. But if you do it without the 11th month it can be seen that the prediction for each month is way better and got good result values regarding the accuracy.
+
+
+
+
+# Notes
+- Compare avg. ppo with avg money spend by customers in one year
+- Sales per state
+- Monthly sales/revenue
+- Maybe search a data set which gives info about the economic performance of each state
+
+
