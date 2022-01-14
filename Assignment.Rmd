@@ -19,18 +19,34 @@ library(ggplot2)
 library(dplyr)
 library(forcats)
 library(tidyverse)
-library(car)
+#library(car)
+library(sqldf)
 ```
 
-Reading the CSVs
+
 ```{r}
+# Reading the CSVs(Niklas)
 customers <- read.csv("C:\\Users\\nikla\\Documents\\Uni\\Semester_3\\DASC\\Datasets\\BrazilianEcommerce\\olist_customers_dataset.csv")
 orders <- read.csv("C:\\Users\\nikla\\Documents\\Uni\\Semester_3\\DASC\\Datasets\\BrazilianEcommerce\\olist_orders_dataset.csv")
 order_items <- read.csv("C:\\Users\\nikla\\Documents\\Uni\\Semester_3\\DASC\\Datasets\\BrazilianEcommerce\\olist_order_items_dataset.csv")
+products <- read.csv("C:\\Users\\nikla\\Documents\\Uni\\Semester_3\\DASC\\Datasets\\BrazilianEcommerce\\olist_products_dataset.csv")
+reviews <- read.csv("C:\\Users\\nikla\\Documents\\Uni\\Semester_3\\DASC\\Datasets\\BrazilianEcommerce\\olist_order_reviews_dataset.csv")
+#seller <- read.csv("C:\\Users\\nikla\\Documents\\Uni\\Semester_3\\DASC\\Datasets\\BrazilianEcommerce\\olist_sellers_dataset.csv")
 state_information <-read.csv("C:\\Users\\nikla\\Documents\\Uni\\Semester_3\\DASC\\Datasets\\BrazilianEcommerce\\brazil_state_information.csv", sep = ";")
+
 ```
 
 
+```{r}
+#Reading the CSVs(Felix)
+# orders <- read.csv("C:/Users/Felix/Documents/Fontys/DASC/brazil/olist_orders_dataset.csv")
+# customers <- read.csv("C:/Users/Felix/Documents/Fontys/DASC/brazil/olist_customers_dataset.csv")
+# order_items <- read.csv("C:/Users/Felix/Documents/Fontys/DASC/brazil/olist_order_items_dataset.csv")
+# products <- read.csv("C:/Users/Felix/Documents/Fontys/DASC/brazil/olist_products_dataset.csv")
+# reviews <- read.csv("C:/Users/Felix/Documents/Fontys/DASC/brazil/olist_order_reviews_dataset.csv")
+# seller <- read.csv("C:/Users/Felix/Documents/Fontys/DASC/brazil/olist_order_reviews_dataset.csv")
+# state_information <-read.csv("C:/Users/Felix/Documents/Fontys/DASC/brazil/brazil_state_information.csv", sep = ";")
+```
 
 Joining the tables together
 ```{r}
@@ -48,6 +64,15 @@ orders_customer_items <- orders_customer_items %>%
 orders_customer_items$month <- as.numeric(format(orders_customer_items$order_approved_at, "%m"))
 head(orders_customer_items, n=5)
 ```
+
+```{r}
+orders_sellers <- orders_customer_items %>%
+  left_join(products, "product_id") %>%
+  left_join(reviews, "order_id")
+  
+```
+
+
 ## Comparing the different states
 
 The next plots show the amount of orders per state from 2017 and the total revenue made by each state in 2017
@@ -110,7 +135,7 @@ order_info_by_state %>%
 You can see that there is a correlation between both variables, although the ratio between the amount and the revenue varies a bit.
 So in the next step we want to take a look at the average price of one order grouped by the different states.
 
-In this code chunk, we create a new table which contains the average price per order for each state.
+So we create a new table which contains the average price per order for each state.
 Therefore we have to calculate the total order price first and after that we can group by the customer state and calculate the average.
 ```{r}
 avg_order_item_price_by_state <- orders_customer_items %>%
@@ -208,38 +233,72 @@ ggplot(data = revnue_state_info, aes(x=population, y=revenue)) + geom_point() #+
 
 This looks like there is a correlation between those variables. This will be analyzed in detail in the Regression part of this Assignment.
 
-## Revenue per month
+# Sellers  
+Revenue from top 10 sellers for 2017
 ```{r}
-revenue_by_month <- orders_customer_items %>%
-  group_by(month) %>%
-  summarise(
-    revenue_by_month = sum(price, na.rm = TRUE)
-  ) 
-ggplot(data = revenue_by_month, aes(x = month, y = revenue_by_month)) +
-  geom_point(size=4, color = "#FF6666") +
-  geom_line(size = 1, color = "#FF6666") +
-  ggtitle("Monthly Revenue") +
-  xlab("Month (2017)") + ylab("Revenue in R$") +
-  theme(
-    plot.title = element_text(hjust = 0.5),
-)
+mlp <- orders_sellers %>%
+  group_by(seller_id) %>%
+  summarise(order_price = sum(price),
+            seller_id = seller_id
+            )
 
+sum_of_sold_products <- distinct(mlp)
 
-# revenue_by_day <- orders_customer_items %>%
-#   group_by(order_approved_at) %>%
-#   summarise(
-#     revenue_by_day = sum(price, na.rm = TRUE)
-#   )
-# ggplot(data = revenue_by_day, aes(x = order_approved_at, y = revenue_by_day)) +
-#   # geom_point(size=4, color = "#FF6666") +
-#   geom_line(color = "#FF6666") +
-#   ggtitle("Monthly Revenue") +
-#   xlab("Month (2017)") + ylab("Revenue in R$") +
-#   theme(
-#     plot.title = element_text(hjust = 0.5),
-# ) + geom_smooth(method =lm, level=0.95)
+sorted <- sum_of_sold_products %>%
+    arrange(desc(order_price))
+
+sorted <- sqldf("SELECT * FROM sorted LIMIT 10")
+
+ggplot(sorted) +
+  geom_bar(mapping = aes(fct_reorder(seller_id, order_price), order_price),fill = "#FF6666", color = "black", stat= "identity") +
+  theme(axis.text.x=element_blank()) +
+  ggtitle("Top 10 Sellers") +
+  xlab("seller") +
+  ylab("sales volume")
+
 ```
 
+From this data you can see, that the biggest generated revenue per seller, ranges from 72833.60R\$ to 181113.92R\$.
+
+Best reviewed Sellers. Count of reviews having at least 4 Stars
+```{r}
+seller_group <- orders_sellers %>%
+  group_by(seller_id) %>%
+  summarise(score = sum(review_score >= 4, na.rm = TRUE)) %>%
+  arrange(desc(score))
+
+seller_group <- sqldf("select * from seller_group LIMIT 10")
+
+ggplot(seller_group) +
+  geom_bar(mapping = aes(fct_reorder(seller_id, score), score), fill = "#FF6666", color = "black", stat= "identity") +
+  theme(axis.text.x=element_blank()) +
+  ggtitle("Sellers with best revision") +
+  xlab("seller") +
+  ylab("Amount of at least 4 Star reviews")
+
+```
+
+This data represent the best sellers on the platfrom regarding the amount of good revisions(the amount of at least 4 star revision).
+
+Total sales per category
+```{r}
+best_category <- orders_sellers %>%
+  group_by(product_category_name) %>%
+  summarise(x = sum(price)) %>% filter(product_category_name != "NA") %>%
+  arrange(desc(x)) %>%
+  transform(x = x/1000)
+
+best_category <- sqldf("select * from best_category LIMIT 5")
+
+ggplot(best_category) +
+  geom_bar(mapping = aes(fct_reorder(product_category_name, x), x), fill = "#FF6666", color = "black", stat= "identity") +
+  ggtitle("Best Categorys regarding sales volume") +
+  xlab("Category") +
+  ylab("Sales volume in 1000R$")
+
+```
+
+This data show the five best selling categorys on the platform. You can see that bleza saude(english: beauty and health) is the best selling category.
 
 
 # Regression (Niklas)
@@ -290,8 +349,17 @@ The low P-value right here shows that we can accept the alternative hypothesis, 
 To conclude, São Paulo is still a bit of an outlier, but that can be explained by the fact that it is much more extreme in comparison to the other states.  
 I think this linear model fits pretty good in terms of predicting the revenue given the two variables population and GNP.  
 
-# Monthly revenue regression
+
+# Regression(Felix)
+## Monthly revenue regression
+This regression model, predicts the revenue for the months of a year. Below there are the results for of the regression.
 ```{r}
+revenue_by_month <- orders_customer_items %>%
+  group_by(month) %>%
+  summarise(
+    revenue_by_month = sum(price, na.rm = TRUE)
+  ) 
+
 ggplot(data = revenue_by_month, aes(x = month, y = revenue_by_month)) +
   geom_point(size=4, color = "#FF6666") +
   geom_line(size = 1, color = "#FF6666") +
@@ -308,19 +376,17 @@ summary(monthly_revenue_reg)
 par(mfrow=c(2,2))
 plot(monthly_revenue_reg)
 
-print("-----------!!!!!!!!!!!!-----------")
+print("Below is the regressionmodel without the 11th month")
+
 monthly_revenue_reg <- lm(revenue_by_month ~ month, data = revenue_by_month[-c(11), ])
   
 summary(monthly_revenue_reg)
 par(mfrow=c(2,2))
 plot(monthly_revenue_reg)
 ```
+You can see that the 11th month is out of line, which ends with a R-squared value not that high. This can be traced back to events like black friday, which is a huge thing in brazil. Because of this, a regression model without the 11th month was also made. Here you can see that the prediction is better, that can be seen by the result values, with an high R-squared of 0.9311 and low a p-value of 9.792e-07. A standard error of 31415 is also ok if you keep in mind that there are millions of revenue.  
+Regarding QQ-plot of the four plots of the regression you can see that in the both cases(with all months and without the 11th month) there are some deviations, what is normal because the revenue in some months like november is significant higher due to things like black friday. This can also be seen by the resudials vs leverage where the 11 month is in the right top. So overall it could be said that the regression is fitting well.  
+In conclusion, the results of the regression model show that it can predict the monthly revenue quit well, except the 11th month. But if you do it without the 11th month it can be seen that the prediction for each month is way better and got good result values regarding the accuracy.
 
-
-# Notes
-- Compare avg. ppo with avg money spend by customers in one year
-- Sales per state
-- Monthly sales/revenue
-- Maybe search a data set which gives info about the economic performance of each state
 
 
